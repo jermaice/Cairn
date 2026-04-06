@@ -1,0 +1,5 @@
+anthropic
+tavily-python
+streamlit
+pandas
+python-dotenv
