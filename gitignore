@@ -16,3 +16,6 @@ Thumbs.db
 .cursor/
 .vscode/
 *.idea
+
+#Claude
+.claude/ 
