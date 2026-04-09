@@ -1,2 +1,21 @@
-/.claude
+# Environment
 .env
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Database — load from source CSV, do not commit
+data/cairn.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.cursor/
+.vscode/
+*.idea
+
+#Claude
+.claude/ 
