@@ -13,6 +13,7 @@ stop_reason == "end_turn" (brief fully generated).
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -61,13 +62,14 @@ MAX_TURNS = 10
 
 def generate_brief(planning_area: str) -> str:
     """
-    Run the Cairn agentic loop and return a four-section brief as a string.
+    Run the Cairn agentic loop and return a parsed four-section brief.
 
     Args:
         planning_area: Singapore planning area name, e.g. "Marine Parade".
 
     Returns:
-        The completed brief text.
+        Dict with keys: burden_snapshot, formal_care_presence,
+        policy_context, operational_considerations.
 
     Raises:
         EnvironmentError: If ANTHROPIC_API_KEY is missing from the environment.
@@ -111,13 +113,13 @@ def generate_brief(planning_area: str) -> str:
         ) as stream:
             response = stream.get_final_message()
 
-        # Step 4a: Brief is complete — extract and return the text block.
+        # Step 4a: Brief is complete — extract and parse the text block.
         if response.stop_reason == "end_turn":
-            brief = next(
+            brief_text = next(
                 (block.text for block in response.content if block.type == "text"),
                 "",
             )
-            return brief
+            return _parse_brief(brief_text)
 
         # Step 4b: Claude has requested one or more tool calls.
         if response.stop_reason == "tool_use":
@@ -158,3 +160,47 @@ def generate_brief(planning_area: str) -> str:
         f"Agent did not complete the brief within {MAX_TURNS} turns for "
         f"'{planning_area}'. Check that both tools are returning valid results."
     )
+
+
+# ---------------------------------------------------------------------------
+# Brief parser
+# ---------------------------------------------------------------------------
+
+def _parse_brief(brief_text: str) -> dict:
+    """
+    Split the raw brief string into its four named sections.
+
+    The system prompt enforces these exact headers:
+        ## SECTION 1: BURDEN SNAPSHOT
+        ## SECTION 2: FORMAL CARE PRESENCE
+        ## SECTION 3: POLICY CONTEXT
+        ## SECTION 4: OPERATIONAL CONSIDERATIONS
+
+    re.split() on this pattern produces five elements:
+        [0]  text before the first header (discarded — should be empty)
+        [1]  burden_snapshot content
+        [2]  formal_care_presence content
+        [3]  policy_context content
+        [4]  operational_considerations content
+
+    Raises:
+        RuntimeError: If the brief does not contain exactly four sections.
+    """
+    # Match any of the four section headers; IGNORECASE for robustness
+    pattern = r"##\s+SECTION\s+[1-4]:[^\n]*"
+    parts = re.split(pattern, brief_text, flags=re.IGNORECASE)
+
+    if len(parts) != 5:
+        raise RuntimeError(
+            f"Brief parsing failed: expected 5 segments after splitting on "
+            f"section headers, got {len(parts)}. "
+            f"The model may have used unexpected header formatting. "
+            f"Raw brief (first 500 chars): {brief_text[:500]!r}"
+        )
+
+    return {
+        "burden_snapshot": parts[1].strip(),
+        "formal_care_presence": parts[2].strip(),
+        "policy_context": parts[3].strip(),
+        "operational_considerations": parts[4].strip(),
+    }
